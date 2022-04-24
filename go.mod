@@ -9,8 +9,8 @@ require (
 )
 
 require (
-	github.com/robfig/cron/v3 v3.0.1
 	github.com/antonmedv/expr v1.9.0
+	github.com/robfig/cron/v3 v3.0.1
 	golang.org/x/text v0.3.7 // indirect
 	google.golang.org/genproto v0.0.0-20220310185008-1973136f34c6 // indirect
 )
