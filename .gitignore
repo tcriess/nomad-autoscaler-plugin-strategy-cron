@@ -1,2 +1,4 @@
-.idea
-dist
+/.idea
+/dist
+/vendor
+*.orig
