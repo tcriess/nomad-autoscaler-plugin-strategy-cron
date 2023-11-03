@@ -206,11 +206,16 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 		s.logger.Trace("selected period", "period", rules[0].period, "priority", rules[0].priority, "count", rules[0].count)
 		value = rules[0].count
 	}
-	if len(hysteresis) > 0 {
-		cIdx := sort.SearchInts(hysteresis, int(value))
+	if len(hysteresis) > 0 && value < count { // check for hysteresis only if the target value is smaller than the current count
+		// in which hysteresis bracket is the current count?
+		cIdx := sort.SearchInts(hysteresis, int(count))
+		if cIdx < len(hysteresis) && count == int64(hysteresis[cIdx]) {
+			// it is exact
+			cIdx++
+		}
 		if cIdx > 0 {
-			hysteresisValue := hysteresis[cIdx-1]
-			if value > int64(hysteresisValue) && value < count {
+			lower := int64(hysteresis[cIdx-1])
+			if value > lower {
 				value = count
 			}
 		}
