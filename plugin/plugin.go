@@ -145,7 +145,11 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 		if k == runConfigKeyCount {
 			v, err := strconv.ParseInt(element, 10, 64)
 			if err != nil {
-				return -1, fmt.Errorf("invalid value for `%s`: %v (%T)", runConfigKeyCount, element, element)
+				if exprValue, ok := expressionMap[strings.TrimSpace(element)]; ok {
+					v = exprValue
+				} else {
+					return -1, fmt.Errorf("invalid value for `%s`: %v (%T)", runConfigKeyCount, element, element)
+				}
 			}
 			value = v
 		}
