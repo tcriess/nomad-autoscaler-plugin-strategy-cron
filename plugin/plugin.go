@@ -27,6 +27,7 @@ const (
 	runConfigKeyCount            = "count"
 	runConfigKeyPeriodPrefix     = "period_"
 	runConfigKeyExpressionPrefix = "expression_"
+	runConfigHysteresis          = "hysteresis"
 )
 
 var (
@@ -51,8 +52,9 @@ var _ strategy.Strategy = (*StrategyPlugin)(nil)
 // StrategyPlugin is the Periods implementation of the strategy.Strategy
 // interface.
 type StrategyPlugin struct {
-	separator string
-	logger    hclog.Logger
+	separator         string
+	logger            hclog.Logger
+	currentHysteresis int64
 }
 
 // NewCronPlugin returns the Periods implementation of the
@@ -137,6 +139,8 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 		}
 	}
 
+	var hysteresis []int
+
 	for k, element := range config {
 		if k == runConfigKeyCount {
 			v, err := strconv.ParseInt(element, 10, 64)
@@ -144,6 +148,32 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 				return -1, fmt.Errorf("invalid value for `%s`: %v (%T)", runConfigKeyCount, element, element)
 			}
 			value = v
+		}
+
+		if k == runConfigHysteresis {
+			// hysteresis definition.
+			// consists of a comma-separated list of at least 2 integers values
+			// f.e. 2,4 means: as soon as the value hits 4, it stays 4 (or higher) until it drops to 2 or lower
+			// 2,4,6 means: as soon as the value hits 4, it cannot decrease unless the new value is 2 (or lower). it can increase to 5 or 6. When it hits 6, it cannot decrease unless the new value is 4 (or lower).
+			hystParts := strings.Split(element, ",")
+			hysteresis = make([]int, len(hystParts))
+			for i, hystPart := range hystParts {
+				h, err := strconv.ParseInt(hystPart, 10, 64)
+				if err != nil {
+					if exprValue, ok := expressionMap[strings.TrimSpace(hystPart)]; ok {
+						h = exprValue
+					} else {
+						return -1, fmt.Errorf("invalid value for `%s`: %v (%T)", runConfigHysteresis, element, element)
+					}
+				}
+				hysteresis[i] = int(h)
+			}
+			if len(hysteresis) < 2 {
+				return -1, fmt.Errorf("invalid value for `%s`: %v (%T)", runConfigHysteresis, element, element)
+			}
+			if !sort.IntsAreSorted(hysteresis) {
+				return -1, fmt.Errorf("invalid value for `%s`: %v (%T)", runConfigHysteresis, element, element)
+			}
 		}
 
 		if strings.HasPrefix(k, runConfigKeyPeriodPrefix) {
@@ -166,10 +196,20 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 		return value, nil
 	} else if len(rules) == 1 {
 		s.logger.Trace("selected period", "period", rules[0].period, "priority", rules[0].priority, "count", rules[0].count)
-		return rules[0].count, nil
+		value = rules[0].count
 	} else {
 		sort.Sort(RuleSorter(rules))
 		s.logger.Trace("selected period", "period", rules[0].period, "priority", rules[0].priority, "count", rules[0].count)
-		return rules[0].count, nil
+		value = rules[0].count
 	}
+	if len(hysteresis) > 0 {
+		cIdx := sort.SearchInts(hysteresis, int(count))
+		if cIdx > 0 {
+			hysteresisValue := hysteresis[cIdx-1]
+			if value > int64(hysteresisValue) && value < count {
+				value = count
+			}
+		}
+	}
+	return value, nil
 }
