@@ -80,6 +80,12 @@ func evaluateExpression(expression string, count int64, metrics sdk.TimestampedM
 	case string:
 		return strconv.ParseInt(res.(string), 10, 64)
 
+	case float64:
+		return int64(res.(float64)), nil
+
+	case float32:
+		return int64(res.(float32)), nil
+
 	case bool:
 		if res.(bool) {
 			return count, nil
@@ -117,5 +123,5 @@ func evaluateExpression(expression string, count int64, metrics sdk.TimestampedM
 	case uint:
 		return int64(res.(uint)), nil
 	}
-	return 0, fmt.Errorf("could not parse expression result")
+	return 0, fmt.Errorf(fmt.Sprintf("could not parse expression result %+v (%T)", res, res))
 }
