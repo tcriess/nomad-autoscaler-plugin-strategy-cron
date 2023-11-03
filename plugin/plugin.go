@@ -207,7 +207,7 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 		value = rules[0].count
 	}
 	if len(hysteresis) > 0 {
-		cIdx := sort.SearchInts(hysteresis, int(count))
+		cIdx := sort.SearchInts(hysteresis, int(value))
 		if cIdx > 0 {
 			hysteresisValue := hysteresis[cIdx-1]
 			if value > int64(hysteresisValue) && value < count {
