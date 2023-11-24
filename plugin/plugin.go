@@ -84,7 +84,6 @@ func (s *StrategyPlugin) SetConfig(config map[string]string) error {
 
 // Run satisfies the Run function on the strategy.Strategy interface.
 func (s *StrategyPlugin) Run(eval *sdk.ScalingCheckEvaluation, count int64) (*sdk.ScalingCheckEvaluation, error) {
-	s.logger.Info("running cron strategy", "check_name", eval.Check.Name, "current_count", count)
 	targetCount, err := s.calculateTargetCount(eval.Check.Strategy.Config, count, eval.Metrics, time.Now)
 	if err != nil {
 		return eval, err
@@ -179,7 +178,6 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 			if !sort.IntsAreSorted(hysteresis) {
 				return -1, fmt.Errorf("invalid value for `%s`: %v (%T)", runConfigHysteresis, element, element)
 			}
-			s.logger.Info("hysteresis definition", "hysteresis", hysteresis)
 		}
 
 		if strings.HasPrefix(k, runConfigKeyPeriodPrefix) {
@@ -198,7 +196,9 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 		}
 	}
 
-	if len(rules) == 1 {
+	if len(rules) == 0 {
+		return value, nil
+	} else if len(rules) == 1 {
 		s.logger.Trace("selected period", "period", rules[0].period, "priority", rules[0].priority, "count", rules[0].count)
 		value = rules[0].count
 	} else {
@@ -206,22 +206,21 @@ func (s *StrategyPlugin) calculateTargetCount(config map[string]string, count in
 		s.logger.Trace("selected period", "period", rules[0].period, "priority", rules[0].priority, "count", rules[0].count)
 		value = rules[0].count
 	}
-	s.logger.Info("hysteresis check", "count", count, "value", value, "hysteresis", hysteresis)
 	if len(hysteresis) > 0 && value < count { // check for hysteresis only if the target value is smaller than the current count
+		s.logger.Trace("checking hysteresis", "hysteresis", hysteresis, "count", count, "value", value)
 		// in which hysteresis bracket is the current count?
-		s.logger.Info("checking hysteresis", "count", count, "hysteresis", hysteresis, "value", value)
 		cIdx := sort.SearchInts(hysteresis, int(count))
 		if cIdx < len(hysteresis) && count == int64(hysteresis[cIdx]) {
 			// it is exact
-			s.logger.Info("count at the exact value", "count", count, "hysteresis", hysteresis, "value", value)
 			cIdx++
 		}
 		if cIdx > 0 {
 			lower := int64(hysteresis[cIdx-1])
-			s.logger.Info("checking hysteresis", "cIdx", cIdx, "lower", lower)
 			if value > lower {
+				s.logger.Trace("hysteresis: adjusting value", "lower", lower, "count", count, "value", value)
 				value = count
-				s.logger.Info("hysteresis applied", "count", count, "hysteresis", hysteresis, "value", value, "lower", lower)
+			} else {
+				s.logger.Trace("hysteresis: no adjustment", "lower", lower, "count", count, "value", value)
 			}
 		}
 	}
